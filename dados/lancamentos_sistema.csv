@@ -1,0 +1,13 @@
+id;data;descricao;tipo;categoria;valor;documento
+S01;2026-11-02;Venda pacote Gramado - Cliente Silva;RECEITA;venda_pacote;4500.00;PIX-1001
+S02;2026-11-03;Venda pacote Porto Seguro (cartão 3x) - Cliente Souza;RECEITA;venda_pacote;6200.00;CART-2001
+S03;2026-11-04;Pagamento Hotel Serra Azul;DESPESA;fornecedor_hotel;2800.00;TED-3001
+S04;2026-11-05;Pagamento Cia Aérea VoeBem;DESPESA;fornecedor_aereo;3900.00;BOL-4001
+S05;2026-11-06;Venda passeio Fernando de Noronha - Cliente Lima;RECEITA;venda_passeio;1850.00;PIX-1002
+S06;2026-11-08;Comissão operadora TurBrasil;RECEITA;comissao;720.00;TED-3002
+S07;2026-11-09;Venda city tour - Cliente Rocha;RECEITA;venda_passeio;980.00;PIX-1005
+S08;2026-11-10;Pagamento guia turístico João;DESPESA;fornecedor_guia;450.00;
+S09;2026-11-12;Venda pacote Bariloche (cartão) - Cliente Costa;RECEITA;venda_pacote;9800.00;CART-2002
+S10;2026-11-15;Pagamento transfer aeroporto;DESPESA;fornecedor_transporte;380.00;PIX-1004
+S11;2026-11-18;Venda pacote Jericoacoara - Cliente Alves;RECEITA;venda_pacote;5300.00;BOL-4002
+S12;2026-11-19;Pagamento seguro viagem grupo;DESPESA;seguro;610.00;CHQ-5001
