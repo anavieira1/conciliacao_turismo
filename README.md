@@ -11,6 +11,19 @@ streamlit run app.py      # versão web, abre no navegador
 python main.py            # versão terminal
 ```
 
+## Rodar os testes
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+## Conferência do extrato
+
+Informe na barra lateral o **saldo final impresso no extrato do banco**. O app
+compara esse valor com `saldo inicial + soma das linhas do arquivo` e avisa se
+o extrato exportado veio incompleto.
+
 ## Formato dos arquivos (CSV separado por `;`)
 
 **Sistema:** `id;data;descricao;tipo;categoria;valor;documento`
