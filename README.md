@@ -20,6 +20,8 @@ sistema. Na prática, isso é feito à mão no Excel, linha por linha:
 
 Este projeto automatiza esse trabalho e entrega a lista do que precisa de ação.
 
+![App de conciliação bancária com indicadores, conferência do extrato e prova da conciliação](docs/app.png)
+
 ## O que ele faz
 
 Com os dados de exemplo (12 lançamentos no sistema, 13 no extrato):

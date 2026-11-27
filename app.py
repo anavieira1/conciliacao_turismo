@@ -57,16 +57,22 @@ with st.sidebar:
     saldo_inicial = st.number_input(
         "Saldo inicial (igual no banco e no sistema)", value=15000.00, step=100.00, format="%.2f"
     )
-    saldo_final = st.number_input(
-        "Saldo final impresso no extrato do banco", value=None, step=100.00, format="%.2f",
-        placeholder="Ex.: 32047,75",
-        help="Serve para conferir se o arquivo do extrato veio completo.",
-    )
+    # O campo aparece aqui, mas só é desenhado depois de sabermos se o modo
+    # exemplo está ligado (o checkbox fica mais abaixo na barra lateral).
+    lugar_saldo_final = st.container()
 
     st.header("Arquivos")
     arq_sistema = st.file_uploader("Lançamentos do sistema (.csv)", type="csv")
     arq_extrato = st.file_uploader("Extrato bancário (.csv)", type="csv")
     usar_exemplo = st.checkbox("Usar dados de exemplo", value=not (arq_sistema and arq_extrato))
+
+    # Valor inicial diferente = campo novo: ao sair do modo exemplo, ele volta vazio.
+    saldo_final = lugar_saldo_final.number_input(
+        "Saldo final impresso no extrato do banco",
+        value=SALDO_FINAL_EXEMPLO if usar_exemplo else None,
+        step=100.00, format="%.2f", placeholder="Ex.: 32047,75",
+        help="Serve para conferir se o arquivo do extrato veio completo.",
+    )
 
     st.divider()
     st.caption("Modelos de planilha (separador ';')")
@@ -77,8 +83,6 @@ st.title(f"🧾 Conciliação Bancária — {empresa}")
 
 if usar_exemplo:
     fonte_sistema, fonte_extrato = EXEMPLO_SISTEMA, EXEMPLO_EXTRATO
-    if saldo_final is None:
-        saldo_final = SALDO_FINAL_EXEMPLO
     st.info("Mostrando dados de exemplo. Envie seus arquivos na barra lateral e desmarque "
             "'Usar dados de exemplo'.")
 elif arq_sistema and arq_extrato:

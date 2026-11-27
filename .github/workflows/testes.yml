@@ -2,6 +2,7 @@ name: testes
 
 on:
   push:
+    branches: [main]   # nas outras branches, quem roda é o pull_request
   pull_request:
 
 jobs:
