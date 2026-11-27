@@ -11,6 +11,7 @@ BASE = Path(__file__).parent
 EMPRESA = "Horizonte Viagens & Turismo"
 PERIODO = "01/11/2026 a 20/11/2026"
 SALDO_INICIAL = Decimal("15000.00")  # mesmo saldo de abertura no banco e no sistema
+SALDO_FINAL_EXTRATO = Decimal("32047.75")  # saldo impresso no fim do extrato do banco
 
 
 def main() -> None:
@@ -21,7 +22,7 @@ def main() -> None:
 
     itens = conciliar(sistema, banco)
 
-    imprimir(EMPRESA, PERIODO, SALDO_INICIAL, sistema, banco, itens)
+    imprimir(EMPRESA, PERIODO, SALDO_INICIAL, sistema, banco, itens, SALDO_FINAL_EXTRATO)
     saida = BASE / "saida" / "resultado_conciliacao.csv"
     exportar_csv(itens, saida)
     print(f"\nResultado detalhado exportado em: {saida.relative_to(BASE)}")

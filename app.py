@@ -14,11 +14,14 @@ import streamlit as st
 from conciliacao.leitura import ErroDeArquivo, ler_extrato, ler_sistema
 from conciliacao.modelos import Status
 from conciliacao.motor import conciliar
-from conciliacao.relatorio import brl, calcular_prova, gerar_csv, linhas_resultado
+from conciliacao.relatorio import (
+    brl, calcular_prova, gerar_csv, linhas_resultado, mensagem_conferencia,
+)
 
 BASE = Path(__file__).parent
 EXEMPLO_SISTEMA = BASE / "dados" / "lancamentos_sistema.csv"
 EXEMPLO_EXTRATO = BASE / "dados" / "extrato_bancario.csv"
+SALDO_FINAL_EXEMPLO = 32047.75  # saldo final do extrato de exemplo
 
 st.set_page_config(page_title="Conciliação Bancária", page_icon="🧾", layout="wide")
 
@@ -54,6 +57,11 @@ with st.sidebar:
     saldo_inicial = st.number_input(
         "Saldo inicial (igual no banco e no sistema)", value=15000.00, step=100.00, format="%.2f"
     )
+    saldo_final = st.number_input(
+        "Saldo final impresso no extrato do banco", value=None, step=100.00, format="%.2f",
+        placeholder="Ex.: 32047,75",
+        help="Serve para conferir se o arquivo do extrato veio completo.",
+    )
 
     st.header("Arquivos")
     arq_sistema = st.file_uploader("Lançamentos do sistema (.csv)", type="csv")
@@ -69,6 +77,8 @@ st.title(f"🧾 Conciliação Bancária — {empresa}")
 
 if usar_exemplo:
     fonte_sistema, fonte_extrato = EXEMPLO_SISTEMA, EXEMPLO_EXTRATO
+    if saldo_final is None:
+        saldo_final = SALDO_FINAL_EXEMPLO
     st.info("Mostrando dados de exemplo. Envie seus arquivos na barra lateral e desmarque "
             "'Usar dados de exemplo'.")
 elif arq_sistema and arq_extrato:
@@ -80,12 +90,13 @@ else:
 try:
     sistema = ler_sistema(fonte_sistema)
     banco = ler_extrato(fonte_extrato)
-except (ErroDeArquivo, ValueError, KeyError) as erro:
+except ErroDeArquivo as erro:
     st.error(f"Não consegui ler os arquivos: {erro}. Confira se seguem o modelo.")
     st.stop()
 
 itens = conciliar(sistema, banco)
-prova = calcular_prova(Decimal(str(saldo_inicial)), sistema, banco, itens)
+prova = calcular_prova(Decimal(str(saldo_inicial)), sistema, banco, itens,
+                       None if saldo_final is None else Decimal(str(saldo_final)))
 
 # --- Indicadores -------------------------------------------------------------
 contagem = Counter(i.status for i in itens)
@@ -97,23 +108,25 @@ c3.metric("Saldo no sistema", brl(prova["saldo_sistema"]))
 c4.metric("Itens para tratar",
           contagem[Status.DIVERGENTE] + contagem[Status.SO_NO_SISTEMA] + contagem[Status.SO_NO_BANCO])
 
-if prova["diferenca_final"] == 0:
-    st.success("✔ Conciliação fechada: todas as diferenças entre banco e sistema estão explicadas.")
-else:
-    st.error(f"✘ Diferença não explicada de {brl(prova['diferenca_final'])}.")
+nivel, texto = mensagem_conferencia(prova)
+{"ok": st.success, "erro": st.error, "aviso": st.warning}[nivel](texto)
 
 # --- Prova e resumo ----------------------------------------------------------
 col_prova, col_resumo = st.columns([3, 2])
 with col_prova:
     st.subheader("Prova da conciliação")
-    st.table([
+    tabela_prova = [
         {"Item": "Saldo final segundo o EXTRATO", "Valor": brl(prova["saldo_banco"])},
         {"Item": "(+) Só no sistema (a compensar)", "Valor": brl(prova["so_sistema"])},
         {"Item": "(-) Só no extrato (a registrar)", "Valor": brl(-prova["so_banco"])},
         {"Item": "(-) Diferenças em itens casados", "Valor": brl(-prova["dif_casados"])},
         {"Item": "(=) Extrato ajustado", "Valor": brl(prova["saldo_ajustado"])},
         {"Item": "Saldo final segundo o SISTEMA", "Valor": brl(prova["saldo_sistema"])},
-    ])
+    ]
+    if prova["saldo_final_informado"] is not None:
+        tabela_prova.append({"Item": "Saldo final impresso no extrato do banco",
+                             "Valor": brl(prova["saldo_final_informado"])})
+    st.table(tabela_prova)
 with col_resumo:
     st.subheader("Resumo por situação")
     st.table([{"Situação": s.value, "Itens": contagem.get(s, 0)} for s in Status])

@@ -29,8 +29,16 @@ def calcular_prova(
     sistema: list[LancamentoSistema],
     banco: list[LancamentoBanco],
     itens: list[ItemConciliacao],
-) -> dict[str, Decimal]:
-    """Parte do saldo do banco e chega ao saldo do sistema explicando cada diferença."""
+    saldo_final_extrato: Decimal | None = None,
+) -> dict[str, Decimal | None]:
+    """Parte do saldo do banco e chega ao saldo do sistema explicando cada diferença.
+
+    Como cada lançamento cai em exatamente um item, o extrato ajustado SEMPRE
+    bate com o sistema: essa parte organiza as diferenças, mas não prova nada.
+    O que de fato pode falhar é o arquivo do extrato estar incompleto. Por isso
+    a conferência real compara o saldo final IMPRESSO no extrato do banco com
+    saldo inicial + soma das linhas do arquivo (`diferenca_extrato`).
+    """
     so_sistema = sum((i.sistema.valor for i in itens if i.status == Status.SO_NO_SISTEMA), Decimal(0))
     so_banco = sum((i.banco.valor for i in itens if i.status == Status.SO_NO_BANCO), Decimal(0))
     dif_casados = sum((i.diferenca for i in itens if i.sistema and i.banco), Decimal(0))
@@ -46,12 +54,28 @@ def calcular_prova(
         "dif_casados": dif_casados,
         "saldo_ajustado": saldo_ajustado,
         "saldo_sistema": saldo_sistema,
-        "diferenca_final": saldo_ajustado - saldo_sistema,
+        "saldo_final_informado": saldo_final_extrato,
+        "diferenca_extrato": (None if saldo_final_extrato is None
+                              else saldo_final_extrato - saldo_banco),
     }
 
 
+def mensagem_conferencia(prova: dict[str, Decimal | None]) -> tuple[str, str]:
+    """Resultado da conferência do extrato: ('ok' | 'erro' | 'aviso', texto)."""
+    diferenca = prova["diferenca_extrato"]
+    if diferenca is None:
+        return "aviso", ("Informe o saldo final impresso no extrato do banco para conferir "
+                         "se o arquivo está completo.")
+    if diferenca == 0:
+        return "ok", ("Extrato completo: o saldo final do banco bate com as linhas do arquivo. "
+                      "Todas as diferenças entre banco e sistema estão explicadas.")
+    return "erro", (f"O saldo final do banco difere da soma do arquivo em {brl(diferenca)}. "
+                    "Faltam linhas no extrato exportado ou o saldo inicial está errado.")
+
+
 def imprimir(empresa: str, periodo: str, saldo_inicial: Decimal,
-             sistema, banco, itens: list[ItemConciliacao]) -> None:
+             sistema, banco, itens: list[ItemConciliacao],
+             saldo_final_extrato: Decimal | None = None) -> None:
     _titulo(f"CONCILIAÇÃO BANCÁRIA - {empresa}  |  Período: {periodo}")
 
     # Resumo por status
@@ -83,7 +107,7 @@ def imprimir(empresa: str, periodo: str, saldo_inicial: Decimal,
             print(f"{'':<29}↳ {i.observacao}")
 
     # Prova da conciliação
-    p = calcular_prova(saldo_inicial, sistema, banco, itens)
+    p = calcular_prova(saldo_inicial, sistema, banco, itens, saldo_final_extrato)
     _titulo("PROVA DA CONCILIAÇÃO (do saldo do banco ao saldo do sistema)")
     linhas = [
         ("Saldo final segundo o EXTRATO", p["saldo_banco"]),
@@ -92,13 +116,13 @@ def imprimir(empresa: str, periodo: str, saldo_inicial: Decimal,
         ("(-) Diferenças em itens casados (taxas/diverg.)", -p["dif_casados"]),
         ("(=) Saldo do extrato ajustado", p["saldo_ajustado"]),
         ("Saldo final segundo o SISTEMA", p["saldo_sistema"]),
-        ("Diferença não explicada", p["diferenca_final"]),
     ]
+    if p["saldo_final_informado"] is not None:
+        linhas.append(("Saldo final impresso no extrato do banco", p["saldo_final_informado"]))
     for rotulo, valor in linhas:
         print(f"  {rotulo:<55}{brl(valor):>18}")
-    ok = p["diferenca_final"] == 0
-    print("\n  " + ("✔ Conciliação fechada: todas as diferenças estão explicadas."
-                    if ok else "✘ ATENÇÃO: existe diferença não explicada!"))
+    nivel, texto = mensagem_conferencia(p)
+    print("\n  " + {"ok": "✔ ", "erro": "✘ ATENÇÃO: ", "aviso": "! "}[nivel] + texto)
 
 
 def linhas_resultado(itens: list[ItemConciliacao]) -> list[dict[str, object]]:
