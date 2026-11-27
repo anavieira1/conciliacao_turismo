@@ -34,8 +34,13 @@ Com os dados de exemplo (12 lançamentos no sistema, 13 no extrato):
 | Só no sistema                   | 2     | Aguardar compensação                |
 | Só no extrato                   | 3     | Registrar tarifa, IOF e identificar depósito |
 
-Tudo isso aparece num **app web** (Streamlit), com upload dos CSVs, indicadores,
-filtro e download do resultado para Excel, ou numa **versão de terminal**.
+O mesmo motor de conciliação é usado por três portas de entrada:
+
+- uma **API REST** (FastAPI), para outros sistemas enviarem os arquivos e
+  receberem o resultado em JSON;
+- um **app web** (Streamlit), com upload dos CSVs, indicadores, filtro e
+  download do resultado para Excel;
+- uma **versão de terminal**.
 
 ## Como a conciliação funciona
 
@@ -45,6 +50,7 @@ flowchart LR
     B[CSV do extrato] --> L
     L --> M[motor.py<br/>regras de casamento]
     M --> R[relatorio.py<br/>prova + CSV]
+    R --> P[api/<br/>FastAPI]
     R --> W[app.py<br/>Streamlit]
     R --> T[main.py<br/>terminal]
 ```
@@ -68,9 +74,13 @@ extrato exportado incompleto.
 
 - **`Decimal` em vez de `float` para dinheiro.** `0.1 + 0.2` não dá `0.3` em
   float; em conciliação, um centavo de erro quebra a prova.
-- **Motor sem dependência de interface.** `conciliacao/` não importa Streamlit,
-  então a mesma lógica serve ao app, ao terminal e aos testes, e poderá servir
-  a uma API.
+- **Motor sem dependência de interface.** `conciliacao/` não importa Streamlit
+  nem FastAPI, então a mesma lógica serve à API, ao app, ao terminal e aos
+  testes. A API foi adicionada sem mudar uma regra do motor.
+- **Dinheiro como texto no JSON** (`"4500.00"`). JSON não tem tipo decimal, e
+  um número de ponto flutuante poderia virar `4499.999999`.
+- **Códigos estáveis na API** (`so_no_banco`) separados do texto da tela
+  (`"Só no extrato"`), para o texto poder mudar sem quebrar quem integra.
 - **Modelos imutáveis** (`dataclass(frozen=True)`) e `Enum` para os status:
   nenhum lançamento é alterado no meio do processo.
 - **Entrada do mundo real:** aceita `1.234,50` e `1234.50`, `02/11/2026` e
@@ -80,8 +90,10 @@ extrato exportado incompleto.
 
 ## Testes
 
-34 testes com pytest cobrem as regras de casamento, a leitura dos arquivos e a
-prova da conciliação. Eles rodam no GitHub Actions a cada push.
+44 testes com pytest cobrem as regras de casamento, a leitura dos arquivos, a
+prova da conciliação e os endpoints da API (sucesso, CSV inválido, arquivo
+faltando e arquivo grande demais). Eles rodam no GitHub Actions a cada pull
+request.
 
 ```bash
 pip install -r requirements-dev.txt
@@ -101,9 +113,50 @@ Escrever os testes revelou dois bugs, corrigidos com teste de regressão:
 
 ```bash
 pip install -r requirements.txt
-streamlit run app.py      # versão web, abre no navegador
-python main.py            # versão terminal
+uvicorn api.main:app --reload   # API em http://localhost:8000/docs
+streamlit run app.py            # app web, abre no navegador
+python main.py                  # versão terminal
 ```
+
+## API
+
+A documentação interativa (Swagger) fica em `/docs`: dá para enviar os
+arquivos e ver a resposta pelo próprio navegador.
+
+| Método | Rota             | O que faz                                   |
+|--------|------------------|---------------------------------------------|
+| GET    | `/saude`         | Verifica se a API está no ar                |
+| POST   | `/conciliacoes`  | Recebe os dois CSVs e devolve a conciliação |
+
+```bash
+curl -X POST http://localhost:8000/conciliacoes   -F "sistema=@dados/lancamentos_sistema.csv"   -F "extrato=@dados/extrato_bancario.csv"   -F saldo_inicial=15000   -F saldo_final_extrato=32047.75
+```
+
+Resposta (resumida):
+
+```json
+{
+  "indice_conciliacao": "0.8333",
+  "resumo": {"conciliado": 7, "conciliado_taxa": 2, "divergente": 1,
+             "so_no_sistema": 2, "so_no_banco": 3},
+  "conferencia": {"nivel": "ok", "mensagem": "Extrato completo: ..."},
+  "prova": {"saldo_banco": "32047.75", "saldo_sistema": "36210.00", "...": "..."},
+  "itens": [
+    {
+      "status": "conciliado_taxa",
+      "status_descricao": "Conciliado c/ taxa de cartão",
+      "regra": "documento",
+      "diferenca": "-186.00",
+      "observacao": "Taxa da adquirente de 3.00% - lançar como despesa financeira",
+      "sistema": {"id": "S02", "valor": "6200.00", "...": "..."},
+      "banco": {"id": "B03", "valor": "6014.00", "...": "..."}
+    }
+  ]
+}
+```
+
+Erros seguem os códigos HTTP: `422` quando um CSV está fora do formato (a
+mensagem diz qual arquivo e qual linha) e `413` para arquivo acima de 10 MB.
 
 ## Formato dos arquivos (CSV separado por `;`)
 
@@ -124,6 +177,9 @@ conciliacao/
   leitura.py     leitura e validação dos CSVs
   motor.py       regras de casamento
   relatorio.py   prova da conciliação, relatório e CSV
+api/
+  main.py        endpoints (FastAPI)
+  esquemas.py    formato das respostas (Pydantic)
 app.py           interface web (Streamlit)
 main.py          versão de terminal
 tests/           testes com pytest
@@ -131,7 +187,7 @@ tests/           testes com pytest
 
 ## Próximos passos
 
-- [ ] API REST com FastAPI usando o mesmo motor
+- [x] API REST com FastAPI usando o mesmo motor
 - [ ] Histórico de conciliações em PostgreSQL
 - [ ] Docker e deploy da API
 - [ ] Importar extrato em OFX, o formato padrão dos bancos
