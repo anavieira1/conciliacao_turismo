@@ -15,7 +15,7 @@ from conciliacao.leitura import ErroDeArquivo, ler_extrato, ler_sistema
 from conciliacao.modelos import Status
 from conciliacao.motor import conciliar
 from conciliacao.relatorio import (
-    brl, calcular_prova, gerar_csv, linhas_resultado, mensagem_conferencia,
+    brl, calcular_prova, gerar_csv, indice_conciliacao, linhas_resultado, mensagem_conferencia,
 )
 
 BASE = Path(__file__).parent
@@ -104,9 +104,9 @@ prova = calcular_prova(Decimal(str(saldo_inicial)), sistema, banco, itens,
 
 # --- Indicadores -------------------------------------------------------------
 contagem = Counter(i.status for i in itens)
-casados = sum(1 for i in itens if i.sistema and i.banco)
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Índice de conciliação", f"{casados / max(len(sistema), 1):.1%}".replace(".", ","))
+c1.metric("Índice de conciliação",
+          f"{indice_conciliacao(itens, len(sistema)):.1%}".replace(".", ","))
 c2.metric("Saldo no extrato", brl(prova["saldo_banco"]))
 c3.metric("Saldo no sistema", brl(prova["saldo_sistema"]))
 c4.metric("Itens para tratar",

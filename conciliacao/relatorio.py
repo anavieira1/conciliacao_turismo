@@ -60,6 +60,12 @@ def calcular_prova(
     }
 
 
+def indice_conciliacao(itens: list[ItemConciliacao], total_sistema: int) -> Decimal:
+    """Fração dos lançamentos do sistema que encontraram par no extrato (0 a 1)."""
+    casados = sum(1 for i in itens if i.sistema and i.banco)
+    return Decimal(casados) / Decimal(max(total_sistema, 1))
+
+
 def mensagem_conferencia(prova: dict[str, Decimal | None]) -> tuple[str, str]:
     """Resultado da conferência do extrato: ('ok' | 'erro' | 'aviso', texto)."""
     diferenca = prova["diferenca_extrato"]
