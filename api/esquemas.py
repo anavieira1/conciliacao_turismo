@@ -6,9 +6,8 @@ para o tipo decimal da sua linguagem.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
-
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
@@ -82,12 +81,42 @@ class Conferencia(BaseModel):
     mensagem: str
 
 
-class Conciliacao(BaseModel):
+def _em_utc(momento: datetime) -> datetime:
+    # O SQLite devolve a data sem fuso; tudo é gravado em UTC.
+    return momento if momento.tzinfo else momento.replace(tzinfo=timezone.utc)
+
+
+class ResultadoConciliacao(BaseModel):
+    """O que o motor calculou. É isto que fica guardado em JSON no banco."""
     indice_conciliacao: Decimal = Field(description="De 0 a 1.")
     resumo: dict[str, int] = Field(description="Quantidade de itens por código de situação.")
     conferencia: Conferencia
     prova: Prova
     itens: list[ItemSaida]
+
+
+class Conciliacao(ResultadoConciliacao):
+    id: int
+    criada_em: datetime
+
+    _utc = field_validator("criada_em")(_em_utc)
+
+
+class ConciliacaoResumo(BaseModel):
+    """Uma linha da listagem do histórico, sem os itens."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    criada_em: datetime
+    arquivo_sistema: str
+    arquivo_extrato: str
+    saldo_inicial: Decimal
+    saldo_final_extrato: Decimal | None
+    indice_conciliacao: Decimal
+    nivel_conferencia: str = Field(description="ok, erro ou aviso")
+    itens_para_tratar: int = Field(description="Divergentes + só no sistema + só no extrato.")
+
+    _utc = field_validator("criada_em")(_em_utc)
 
 
 class Erro(BaseModel):

@@ -37,7 +37,7 @@ Com os dados de exemplo (12 lançamentos no sistema, 13 no extrato):
 O mesmo motor de conciliação é usado por três portas de entrada:
 
 - uma **API REST** (FastAPI), para outros sistemas enviarem os arquivos e
-  receberem o resultado em JSON;
+  receberem o resultado em JSON, com **histórico salvo em PostgreSQL**;
 - um **app web** (Streamlit), com upload dos CSVs, indicadores, filtro e
   download do resultado para Excel;
 - uma **versão de terminal**.
@@ -53,6 +53,7 @@ flowchart LR
     R --> P[api/<br/>FastAPI]
     R --> W[app.py<br/>Streamlit]
     R --> T[main.py<br/>terminal]
+    P --> D[(PostgreSQL<br/>histórico)]
 ```
 
 As regras são aplicadas em ordem ([motor.py](conciliacao/motor.py)):
@@ -81,6 +82,13 @@ extrato exportado incompleto.
   um número de ponto flutuante poderia virar `4499.999999`.
 - **Códigos estáveis na API** (`so_no_banco`) separados do texto da tela
   (`"Só no extrato"`), para o texto poder mudar sem quebrar quem integra.
+- **Histórico como "foto" da conciliação.** Uma conciliação feita não muda:
+  colunas de resumo servem à listagem, e o resultado completo fica em `JSONB`.
+  Isso evita espalhar cada item por outra tabela só para remontá-lo depois.
+  Dinheiro no banco é `NUMERIC(14,2)`, nunca `float`.
+- **Mesmo código para PostgreSQL e SQLite** (SQLAlchemy 2.0). O banco vem da
+  variável `DATABASE_URL`; sem ela, a API usa um arquivo SQLite para rodar no
+  computador sem instalar nada.
 - **Modelos imutáveis** (`dataclass(frozen=True)`) e `Enum` para os status:
   nenhum lançamento é alterado no meio do processo.
 - **Entrada do mundo real:** aceita `1.234,50` e `1234.50`, `02/11/2026` e
@@ -90,10 +98,14 @@ extrato exportado incompleto.
 
 ## Testes
 
-44 testes com pytest cobrem as regras de casamento, a leitura dos arquivos, a
-prova da conciliação e os endpoints da API (sucesso, CSV inválido, arquivo
-faltando e arquivo grande demais). Eles rodam no GitHub Actions a cada pull
-request.
+52 testes com pytest cobrem as regras de casamento, a leitura dos arquivos, a
+prova da conciliação, os endpoints da API (sucesso, CSV inválido, arquivo
+faltando e arquivo grande demais) e o histórico (salvar, buscar, paginar, 404,
+centavos intactos na ida e volta do banco).
+
+Cada teste começa com um banco vazio. No computador é um SQLite em memória; no
+GitHub Actions, a cada pull request, os mesmos testes rodam contra um
+**PostgreSQL 17 de verdade**.
 
 ```bash
 pip install -r requirements-dev.txt
@@ -118,15 +130,24 @@ streamlit run app.py            # app web, abre no navegador
 python main.py                  # versão terminal
 ```
 
+O histórico da API fica em `saida/historico.db` (SQLite). Para usar
+PostgreSQL, defina o endereço antes de iniciar a API:
+
+```powershell
+$env:DATABASE_URL = "postgresql+psycopg://usuario:senha@localhost:5432/conciliacao"
+```
+
 ## API
 
 A documentação interativa (Swagger) fica em `/docs`: dá para enviar os
 arquivos e ver a resposta pelo próprio navegador.
 
-| Método | Rota             | O que faz                                   |
-|--------|------------------|---------------------------------------------|
-| GET    | `/saude`         | Verifica se a API está no ar                |
-| POST   | `/conciliacoes`  | Recebe os dois CSVs e devolve a conciliação |
+| Método | Rota                   | O que faz                                              |
+|--------|------------------------|--------------------------------------------------------|
+| GET    | `/saude`               | Verifica se a API está no ar                           |
+| POST   | `/conciliacoes`        | Recebe os dois CSVs, salva e devolve a conciliação (201) |
+| GET    | `/conciliacoes`        | Histórico, mais recente primeiro (`?limite=20&inicio=0`) |
+| GET    | `/conciliacoes/{id}`   | Uma conciliação completa do histórico (404 se não existe) |
 
 ```bash
 curl -X POST http://localhost:8000/conciliacoes   -F "sistema=@dados/lancamentos_sistema.csv"   -F "extrato=@dados/extrato_bancario.csv"   -F saldo_inicial=15000   -F saldo_final_extrato=32047.75
@@ -136,6 +157,8 @@ Resposta (resumida):
 
 ```json
 {
+  "id": 1,
+  "criada_em": "2026-11-27T20:15:03.512Z",
   "indice_conciliacao": "0.8333",
   "resumo": {"conciliado": 7, "conciliado_taxa": 2, "divergente": 1,
              "so_no_sistema": 2, "so_no_banco": 3},
@@ -180,6 +203,8 @@ conciliacao/
 api/
   main.py        endpoints (FastAPI)
   esquemas.py    formato das respostas (Pydantic)
+  banco.py       conexão com o banco (DATABASE_URL)
+  tabelas.py     tabela do histórico (SQLAlchemy)
 app.py           interface web (Streamlit)
 main.py          versão de terminal
 tests/           testes com pytest
@@ -188,8 +213,9 @@ tests/           testes com pytest
 ## Próximos passos
 
 - [x] API REST com FastAPI usando o mesmo motor
-- [ ] Histórico de conciliações em PostgreSQL
+- [x] Histórico de conciliações em PostgreSQL
 - [ ] Docker e deploy da API
+- [ ] Migrações do banco com Alembic
 - [ ] Importar extrato em OFX, o formato padrão dos bancos
 
 ## Publicar na nuvem (Streamlit Community Cloud)
