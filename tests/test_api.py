@@ -1,19 +1,10 @@
 """Testes da API: chamam os endpoints como um cliente HTTP faria."""
 from pathlib import Path
 
-import pytest
-from fastapi.testclient import TestClient
-
 from api import main
-from api.main import app
 
 DADOS = Path(__file__).parent.parent / "dados"
 CABECALHO_EXTRATO = "id;data;historico;valor;documento\n"
-
-
-@pytest.fixture
-def cliente():
-    return TestClient(app)
 
 
 def arquivos(sistema: bytes | None = None, extrato: bytes | None = None):
@@ -32,7 +23,7 @@ def test_saude(cliente):
 def test_concilia_os_dados_de_exemplo(cliente):
     resposta = cliente.post("/conciliacoes", files=arquivos(),
                             data={"saldo_inicial": "15000.00", "saldo_final_extrato": "32047.75"})
-    assert resposta.status_code == 200
+    assert resposta.status_code == 201
     corpo = resposta.json()
 
     assert corpo["resumo"] == {
