@@ -81,10 +81,13 @@ async def criar_conciliacao(
     resposta: Response,
     sistema:Annotated[UploadFile, File(description="Lançamentos do sistema (.csv)")],
     extrato: Annotated[UploadFile, File(description="Extrato bancário (.csv)")],
-    saldo_inicial: Annotated[Decimal, Form(description="Saldo de abertura, igual no banco e no sistema")],
-    saldo_final_extrato: Annotated[
-        Decimal | None, Form(description="Saldo final impresso no extrato, para conferir se o arquivo está completo")
-    ] = None,
+    # Os exemplos são os valores dos dados de exemplo. Sem eles, o Swagger
+    # preenche os campos com 0 e envia "saldo final = 0" sem a pessoa perceber.
+    saldo_inicial: Annotated[Decimal, Form(
+        description="Saldo de abertura, igual no banco e no sistema", examples=["15000.00"])],
+    saldo_final_extrato: Annotated[Decimal | None, Form(
+        description="Saldo final impresso no extrato, para conferir se o arquivo está completo",
+        examples=["32047.75"])] = None,
 ) -> Conciliacao:
     """Concilia os dois arquivos, guarda no histórico e devolve o resultado item a item."""
     conteudo_sistema = await _ler_upload(sistema, "sistema")
